@@ -1,25 +1,22 @@
-addpath('mnistHelper');
+addpath('mnistHelper', 'wisard');
 
 
 %% load dataset
 
-MNIST_PATH = '/Volumes/DADOS/Code/WiSARD_imp/python-mnist/data/';
+MNIST_PATH = 'mnistData/';
 
-images_train = loadMNISTImages([MNIST_PATH 'train-images-idx3-ubyte']);
-labels_train = cellstr(num2str(loadMNISTLabels([MNIST_PATH 'train-labels-idx1-ubyte'])));
+images_train = loadMNISTImages([MNIST_PATH 'train-images.idx3-ubyte']);
+labels_train = cellstr(num2str(loadMNISTLabels([MNIST_PATH 'train-labels.idx1-ubyte'])));
 
-images_test = loadMNISTImages([MNIST_PATH 't10k-images-idx3-ubyte']);
-labels_test = cellstr(num2str(loadMNISTLabels([MNIST_PATH 't10k-labels-idx1-ubyte'])));
+images_test = loadMNISTImages([MNIST_PATH 't10k-images.idx3-ubyte']);
+labels_test = cellstr(num2str(loadMNISTLabels([MNIST_PATH 't10k-labels.idx1-ubyte'])));
 
 
-% train_images = images(:, 1:1000);
-% train_labels = labels(1:1000);
-% test_images = images(:, 1001:1500);
-% test_labels = labels(1001:1500);
+
 
 %% binarize images
-train_imagesb = train_images > 0;
-test_imagesb = test_images > 0;
+train_imagesb = images_train > 0;
+test_imagesb = images_test > 0;
 
 % % transpose image to match python
 % for i=1:size(train_imagesb, 2)
@@ -50,21 +47,16 @@ bits_order = [349, 171, 483, 278, 103, 453, 538, 389, 147, 234, 241, 643, 624, 4
 
 %% Evaluate
 
-classes = sort(unique(labels));
+classes = sort(unique(labels_train));
 input_size = size(train_imagesb, 1);
 nbits = 24;
-accuracies = [];
-thresholds = [0 0.01 0.0625 0.125 0.25 0.5 0.75 0.9 0.95];
-%for i = 1:length(thresholds)
 
-    w = WiSARD( classes, input_size, nbits, bits_order, 1 );
-   
-    w.fit(train_imagesb', train_labels);
-    %w.bleach('discretize', thresholds(i) );
-    
-    [y, results] = w.predict(test_imagesb');
-    accuracies = sum(strcmp(y, test_labels')) / length(y)
-%end
+w = WiSARD( classes, input_size, nbits, bits_order, 1 );
+w.fit(train_imagesb', labels_train);
+[y, results] = w.predict(test_imagesb');
+
+accuracy = sum(strcmp(y, labels_test)) / length(y);
+disp(accuracy);
 
 
 

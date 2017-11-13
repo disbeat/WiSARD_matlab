@@ -1,2 +1,5 @@
 *.m~
-
+mnistData/*
+*.asv
+*/*.asv
+*/*.m~
