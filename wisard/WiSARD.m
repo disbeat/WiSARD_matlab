@@ -1,5 +1,5 @@
 classdef WiSARD < handle
-%WISARD Wilkie,Stonham & Aleksander’s Recognition Device matlab implementation
+%WISARD Wilkie,Stonham & Aleksanderâ€™s Recognition Device matlab implementation
 %   WiSARD algorithm matlab implementation. It comprises both matrix
 %   (direct access - fast but requires huge ammount of memory) and map
 %   (hashmap access - slower but requires small amount of memory)
@@ -120,7 +120,7 @@ classdef WiSARD < handle
             % Trains the WiSARD using the map discriminators
             
             nSamples = size(dataAddr, 1);
-            for i = nSamples
+            for i = 1:nSamples
                 for m = 1:obj.nmemories
                     % get memory address
                     addr = dataAddr(i, m);
