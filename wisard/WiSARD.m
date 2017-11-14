@@ -1,5 +1,5 @@
 classdef WiSARD < handle
-%WISARD Wilkie,Stonham & Aleksanderâ€™s Recognition Device matlab implementation
+%WISARD Wilkie,Stonham & Aleksander’s Recognition Device matlab implementation
 %   WiSARD algorithm matlab implementation. It comprises both matrix
 %   (direct access - fast but requires huge ammount of memory) and map
 %   (hashmap access - slower but requires small amount of memory)
@@ -16,14 +16,21 @@ classdef WiSARD < handle
         bits_order      % random mapping of inputs to memories
         use_map         % boolean for using map (1) or matrix (0)
         priors          % array of prior class probability
+        max_threshold   % higher threshold value for predictive bleaching
     end
     
     methods      
-        function obj = WiSARD(classes, input_size, nbits, bits_order, use_map, priors)
+        function obj = WiSARD(classes, input_size, nbits, bits_order, use_map, priors, max_threshold)
             % Constructor creates base parameters for the classifier
             %
             % Input:
-            % classes    -  class identifiers in a cell array, ex. {0 1}
+            % classes       -  class identifiers in a cell array, ex. {0 1}
+            % input_size    -  length of each sample (feature vecto)
+            % nbits         -  number of bits to use on each memory
+            % bits_order    -  random mapping of bits to memories
+            % use_map       -  boolean for using map or matrix in discriminators
+            % priors        -  class relative frequencies
+            % max_threshold -  higher threshold value for predictive bleaching 
             if nargin < 3
                 error('Not enough input arguments');
             end
@@ -41,6 +48,9 @@ classdef WiSARD < handle
                 % training set
                 priors = [];
             end
+            if nargin < 7
+                max_threshold = 0.5;
+            end
             
             % map input parameters to class
             obj.classes = classes;
@@ -49,6 +59,7 @@ classdef WiSARD < handle
             obj.use_map = use_map;
             obj.bits_order = bits_order;            
             obj.priors = priors;
+            obj.max_threshold = max_threshold;
             
             % create discriminators
             for c = 1:length(classes)
@@ -83,18 +94,16 @@ classdef WiSARD < handle
                 labels = num2cell(labels);
             end
             
+            % compute priors if not defined
+            if isempty(obj.priors)
+                obj.priors = hist(cell2mat(labels), length(unique(cell2mat(labels))))/length(labels);
+            end
+            
             % transform labels to class indexes
             classIdxs = nan(size(labels));
             for i=1:length(labels)
                 classIdxs(i) = find([obj.classes{:}] == cell2mat(labels(i)));
             end
-            
-            % compute priors if not defined
-            if isempty(obj.priors)
-                obj.priors = hist(classIdxs, length(unique(classIdxs)))/length(classIdxs);
-            end
-            
-            
             
             
             % call respective training function: map or matrix
@@ -166,16 +175,27 @@ classdef WiSARD < handle
                 rawCounts = obj.predictMatrix(dataAddr);
             end
             
+            [labels, classCounts] = obj.bleach(rawCounts, obj.max_threshold);
+            
+        end
+        
+        function [labels, classCounts] = bleach(obj, rawCounts, maxThreshold)
+            % Bleach the memory counts. Uses 100 thresholds from 0 to
+            % maxThreshold to count how many memories are above threashold
+            % for each of those and computes confidence values for each.
+            % Returns the count with bigger confidence for each sample.
+            if nargin < 3
+                maxThreshold = obj.max_threshold;
+            end
+            
             % results are of type [nSamples, nClasses, nMemories]
             [nSamples, nClasses, nMemories] = size(rawCounts);
-            
-            
-            % bleaching
+                        
             NTHRESHOLDS = 100;
             
             thresholds = nan(1,1,NTHRESHOLDS);            
-            % thresholds go from ~0 to 0.5
-            thresholds(1,1,1:NTHRESHOLDS) = (1:NTHRESHOLDS) * .5 ./ NTHRESHOLDS;
+            % thresholds go from ~0 to max_threshold
+            thresholds(1,1,1:NTHRESHOLDS) = (1:NTHRESHOLDS) * maxThreshold ./ NTHRESHOLDS;
             thresholds = repmat(thresholds, [nClasses nMemories 1]);
             
             
@@ -225,6 +245,7 @@ classdef WiSARD < handle
             for i = 1:size(dataAddr, 1)
                 for d = 1:length(obj.classes)
                     discriminator = obj.discriminators{d};
+                    % get memory count for each memory and each discriminator
                     for m = 1:obj.nmemories
                         results(i, d, m) = WiSARD.mapGet(discriminator{m}, dataAddr(i, m));
                     end
