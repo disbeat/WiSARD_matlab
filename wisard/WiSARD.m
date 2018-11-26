@@ -1,5 +1,5 @@
 classdef WiSARD < handle
-%WISARD Wilkie,Stonham & Aleksander’s Recognition Device matlab implementation
+%WISARD Wilkie,Stonham & Aleksander�s Recognition Device matlab implementation
 %   WiSARD algorithm matlab implementation. It comprises both matrix
 %   (direct access - fast but requires huge ammount of memory) and map
 %   (hashmap access - slower but requires small amount of memory)
@@ -17,6 +17,7 @@ classdef WiSARD < handle
         use_map         % boolean for using map (1) or matrix (0)
         priors          % array of prior class probability
         max_threshold   % higher threshold value for predictive bleaching
+        misc            % help structure for additional model variables
     end
     
     methods      
@@ -25,7 +26,7 @@ classdef WiSARD < handle
             %
             % Input:
             % classes       -  class identifiers in a cell array, ex. {0 1}
-            % input_size    -  length of each sample (feature vecto)
+            % input_size    -  length of each sample (feature vector)
             % nbits         -  number of bits to use on each memory
             % bits_order    -  random mapping of bits to memories
             % use_map       -  boolean for using map or matrix in discriminators
@@ -41,7 +42,7 @@ classdef WiSARD < handle
             if nargin < 5 || isempty(use_map)
                 % automatically choose between map or matrix based on
                 % input_size and nbits
-                use_map = (2^nbits * (input_size / nbits) * length(classes)) > 1E8;
+                use_map = (2^nbits * (input_size / nbits) * length(classes)) > (1E6)*9;
             end
             if nargin < 6
                 % if no priors provided, leave empty and will compute from
@@ -60,6 +61,8 @@ classdef WiSARD < handle
             obj.bits_order = bits_order;            
             obj.priors = priors;
             obj.max_threshold = max_threshold;
+            obj.misc = struct();
+            
             
             % create discriminators
             for c = 1:length(classes)
@@ -77,7 +80,17 @@ classdef WiSARD < handle
             end
             
         end
+
         
+        function [w] = clone(obj)
+            w = WiSARD(obj.classes, length(obj.bits_order), obj.nbits, obj.bits_order, obj.use_map, obj.priors, obj.max_threshold);
+            w.misc = obj.misc;
+            
+            for d = 1:length(w.classes)
+                w.discriminators{d} = obj.discriminators{d};
+            end
+
+        end
         
         
         function fit(obj, data, labels)
@@ -156,7 +169,7 @@ classdef WiSARD < handle
                     obj.discriminators{c}(:, 1) = 0;
                 else
                     for m = 1:obj.nmemories
-                        obj.discriminators{c}{m}(1) = 0;
+                        obj.discriminators{c}{m}(0) = 0;
                     end
                 end
             end
@@ -304,15 +317,19 @@ classdef WiSARD < handle
             end
         end
         
-        function [tValues] = thermometerize(values, nLevels)
+        function [tValues, limits] = thermometerize(values, nLevels, limits)
             % Descretizes values using the thermometer method. Receives 
             % the values to descretize and the number of levels to use
             
             if nargin < 2
                 nLevels = 5;
             end
-
-            dValues = discretize(values, nLevels+1);
+            if nargin < 3 || sum(~isnan(limits)) == 0
+                [dValues, limits] = discretize(values, nLevels+1);
+                limits(1) = -Inf; limits(end) = Inf;
+            else
+                [dValues, limits] = discretize(values, limits);
+            end
             dValues(isnan(dValues)) = 0;
 
             tValues = zeros(length(values), nLevels);
@@ -322,7 +339,7 @@ classdef WiSARD < handle
 
         end
         
-        function [bData] = binarizeData(data, method, varargin)
+        function [bData, limits] = binarizeData(data, method, varargin)
             % Transform data into binary representation using the specified method
             % Suported methods: 'thermometer'
             
@@ -333,21 +350,25 @@ classdef WiSARD < handle
             % get data size
             [nsamples, nfeats] = size(data);
             
-            
-
             if strcmpi(method, 'thermometer')
                 if nargin < 3
                     nLevels = 5;
                 else
                     nLevels = varargin{1};
+                    if nargin >= 4
+                       limits = varargin{2};
+                    else
+                       limits = nan(nLevels + 2, nfeats);
+                    end
                 end
                 
                 % initialize result variable
                 bData = zeros(nsamples, nfeats * nLevels);
                 
+                
                 % transform each column
                 for f = 1:nfeats
-                    featData = WiSARD.thermometerize(squeeze(data(:, f)), nLevels);
+                    [featData, limits(:, f)] = WiSARD.thermometerize(squeeze(data(:, f)), nLevels, limits(:, f));
                     bData(:, (f-1)*nLevels+1: f*nLevels) = featData;
                 end
             else
